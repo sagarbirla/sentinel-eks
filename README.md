@@ -4,36 +4,6 @@
 
 This project implements a production-ready, multi-VPC Kubernetes architecture for Rapyd Sentinel, demonstrating secure cross-cluster communication, infrastructure as code best practices, and automated CI/CD deployment.
 
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         AWS Account                          │
-│                                                              │
-│  ┌────────────────────────┐    ┌─────────────────────────┐ │
-│  │   VPC Gateway          │    │   VPC Backend           │ │
-│  │   (Public Layer)       │◄───┤   (Private Layer)       │ │
-│  │                        │    │                         │ │
-│  │  ┌──────────────────┐ │    │  ┌──────────────────┐  │ │
-│  │  │  EKS Gateway     │ │    │  │  EKS Backend     │  │ │
-│  │  │                  │ │    │  │                  │  │ │
-│  │  │  ┌────────────┐  │ │    │  │  ┌────────────┐ │  │ │
-│  │  │  │   Proxy    │──┼─┼────┼──┼─►│  Backend   │ │  │ │
-│  │  │  │   (NGINX)  │  │ │    │  │  │  Service   │ │  │ │
-│  │  │  └────────────┘  │ │    │  │  └────────────┘ │  │ │
-│  │  │      │           │ │    │  │                  │  │ │
-│  │  └──────┼───────────┘ │    │  └──────────────────┘  │ │
-│  │         │             │    │                         │ │
-│  └─────────┼─────────────┘    └─────────────────────────┘ │
-│            │                          VPC Peering          │
-│            ▼                                                │
-│    Internet Gateway                                         │
-└─────────────────────────────────────────────────────────────┘
-              │
-              ▼
-          Internet
-```
-
 ### Key Components
 
 1. **VPC Gateway**: Hosts internet-facing proxy services
@@ -69,11 +39,6 @@ This project implements a production-ready, multi-VPC Kubernetes architecture fo
 ## Quick Start
 
 ### 1. Fork and Clone
-
-```bash
-git clone https://github.com/your-org/rapyd-sentinel-infra.git
-cd rapyd-sentinel-infra
-```
 
 ### 2. Configure AWS OIDC (Recommended)
 
@@ -130,8 +95,8 @@ terraform plan -out=tfplan
 terraform apply tfplan
 
 # Configure kubectl
-aws eks update-kubeconfig --name eks-gateway --region us-east-1
-aws eks update-kubeconfig --name eks-backend --region us-east-1 --alias eks-backend
+aws eks update-kubeconfig --name eks-gateway --region eu-west-1
+aws eks update-kubeconfig --name eks-backend --region eu-west-1 --alias eks-backend
 
 # Deploy applications
 kubectl apply -f kubernetes/backend/
@@ -468,26 +433,3 @@ aws ec2 describe-security-groups --group-ids <sg-id>
 # Verify peering routes
 aws ec2 describe-route-tables --route-table-ids <rt-id>
 ```
-
-### Common Issues
-
-1. **Terraform State Lock**: 
-   - Use S3 backend with DynamoDB locking
-   - Run `terraform force-unlock <lock-id>` if needed
-
-2. **IAM Permission Errors**:
-   - Verify role naming follows `eks-*` or `sentinel-*` prefix
-   - Check IAM policy attachments
-
-3. **Pod Networking**:
-   - Ensure VPC CNI plugin is updated
-   - Check available IPs in subnets
-   - Verify security group rules
-
-## Contributing
-
-1. Create feature branch
-2. Make changes
-3. Run `terraform fmt` and `terraform validate`
-4. Submit PR with clear description
-5. Wait for CI/CD checks to pass
