@@ -16,13 +16,6 @@ resource "aws_iam_role" "cluster" {
       }
     ]
   })
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.cluster_name}-cluster-role"
-    }
-  )
 }
 
 # Attach required policies to cluster role
@@ -171,13 +164,6 @@ resource "aws_iam_role" "node" {
       }
     ]
   })
-
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.cluster_name}-node-role"
-    }
-  )
 }
 
 # Attach required policies to node role
@@ -196,18 +182,20 @@ resource "aws_iam_role_policy_attachment" "node_ecr_policy" {
   role       = aws_iam_role.node.name
 }
 
-data "aws_ssm_parameter" "eks_ami_release_version" {
-  name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.this.version}/amazon-linux-2023/x86_64/standard/recommended/release_version"
-}
+### CANT BE USED BECAUSE OF LACK OF PERMISSIONS TO ACCESS SSM PARAMETER
+
+# data "aws_ssm_parameter" "eks_ami_release_version" {
+#   name = "/aws/service/eks/optimized-ami/${aws_eks_cluster.this.version}/amazon-linux-2023/x86_64/standard/recommended/release_version"
+# }
 
 # EKS Node Group
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = var.node_group_name
   version         = aws_eks_cluster.this.version
-  release_version = nonsensitive(data.aws_ssm_parameter.eks_ami_release_version.value)
-  node_role_arn   = aws_iam_role.node.arn
-  subnet_ids      = var.subnet_ids
+  #release_version = nonsensitive(data.aws_ssm_parameter.eks_ami_release_version.value)
+  node_role_arn = aws_iam_role.node.arn
+  subnet_ids    = var.subnet_ids
 
   instance_types = var.node_instance_types
 
@@ -245,15 +233,17 @@ data "tls_certificate" "this" {
   url = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
 
-resource "aws_iam_openid_connect_provider" "this" {
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
-  url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
+### CANT BE USED BECAUSE OF LACK OF PERMISSIONS TO CREATE AN OIDC PROVIDER
 
-  tags = merge(
-    var.tags,
-    {
-      Name = "${var.cluster_name}-oidc-provider"
-    }
-  )
-}
+# resource "aws_iam_openid_connect_provider" "this" {
+#   client_id_list  = ["sts.amazonaws.com"]
+#   thumbprint_list = [data.tls_certificate.this.certificates[0].sha1_fingerprint]
+#   url             = aws_eks_cluster.this.identity[0].oidc[0].issuer
+
+#   tags = merge(
+#     var.tags,
+#     {
+#       Name = "${var.cluster_name}-oidc-provider"
+#     }
+#   )
+# }

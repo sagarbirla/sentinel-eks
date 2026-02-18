@@ -1,9 +1,9 @@
 # Networking Module - VPC Peering Configuration
 
 resource "aws_vpc_peering_connection" "this" {
-  vpc_id        = var.requester_vpc_id
-  peer_vpc_id   = var.accepter_vpc_id
-  auto_accept   = true
+  vpc_id      = var.requester_vpc_id
+  peer_vpc_id = var.accepter_vpc_id
+  auto_accept = true
 
   accepter {
     allow_remote_vpc_dns_resolution = true

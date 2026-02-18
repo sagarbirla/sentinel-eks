@@ -26,14 +26,14 @@ terraform {
 provider "aws" {
   region = var.aws_region
 
-  default_tags {
-    tags = {
-      Project     = "RapydSentinel"
-      Environment = var.environment
-      ManagedBy   = "Terraform"
-      Owner       = "Platform-Team"
-    }
-  }
+  # default_tags {
+  #   tags = {
+  #     Project     = "RapydSentinel"
+  #     Environment = var.environment
+  #     ManagedBy   = "Terraform"
+  #     Owner       = "Platform-Team"
+  #   }
+  # }
 }
 
 # Data source for availability zones
@@ -45,13 +45,13 @@ data "aws_availability_zones" "available" {
 module "vpc_gateway" {
   source = "./modules/vpc"
 
-  vpc_name            = "vpc-gateway"
-  vpc_cidr            = var.gateway_vpc_cidr
-  availability_zones  = slice(data.aws_availability_zones.available.names, 0, 2)
-  private_subnets     = var.gateway_private_subnets
-  public_subnets      = var.gateway_public_subnets
-  enable_nat_gateway  = true
-  single_nat_gateway  = var.single_nat_gateway
+  vpc_name             = "vpc-gateway"
+  vpc_cidr             = var.gateway_vpc_cidr
+  availability_zones   = slice(data.aws_availability_zones.available.names, 0, 2)
+  private_subnets      = var.gateway_private_subnets
+  public_subnets       = var.gateway_public_subnets
+  enable_nat_gateway   = true
+  single_nat_gateway   = var.single_nat_gateway
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -64,13 +64,13 @@ module "vpc_gateway" {
 module "vpc_backend" {
   source = "./modules/vpc"
 
-  vpc_name            = "vpc-backend"
-  vpc_cidr            = var.backend_vpc_cidr
-  availability_zones  = slice(data.aws_availability_zones.available.names, 0, 2)
-  private_subnets     = var.backend_private_subnets
-  public_subnets      = var.backend_public_subnets
-  enable_nat_gateway  = true
-  single_nat_gateway  = var.single_nat_gateway
+  vpc_name             = "vpc-backend"
+  vpc_cidr             = var.backend_vpc_cidr
+  availability_zones   = slice(data.aws_availability_zones.available.names, 0, 2)
+  private_subnets      = var.backend_private_subnets
+  public_subnets       = var.backend_public_subnets
+  enable_nat_gateway   = true
+  single_nat_gateway   = var.single_nat_gateway
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -101,7 +101,7 @@ module "vpc_peering" {
 module "eks_gateway" {
   source = "./modules/eks"
 
-  cluster_name    = "eks-gateway"
+  cluster_name    = "eks-gateway-sagar-poc"
   cluster_version = var.eks_version
   vpc_id          = module.vpc_gateway.vpc_id
   subnet_ids      = module.vpc_gateway.private_subnet_ids
@@ -141,7 +141,7 @@ module "eks_gateway" {
 module "eks_backend" {
   source = "./modules/eks"
 
-  cluster_name    = "eks-backend"
+  cluster_name    = "eks-backend-sagar-poc"
   cluster_version = var.eks_version
   vpc_id          = module.vpc_backend.vpc_id
   subnet_ids      = module.vpc_backend.private_subnet_ids
