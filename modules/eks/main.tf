@@ -229,11 +229,12 @@ resource "aws_eks_node_group" "this" {
 }
 
 # OIDC Provider for IRSA (IAM Roles for Service Accounts)
-data "tls_certificate" "this" {
-  url = aws_eks_cluster.this.identity[0].oidc[0].issuer
-}
 
 ### CANT BE USED BECAUSE OF LACK OF PERMISSIONS TO CREATE AN OIDC PROVIDER
+
+# data "tls_certificate" "this" {
+#   url = aws_eks_cluster.this.identity[0].oidc[0].issuer
+# }
 
 # resource "aws_iam_openid_connect_provider" "this" {
 #   client_id_list  = ["sts.amazonaws.com"]
