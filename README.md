@@ -71,6 +71,35 @@ The CI/CD pipeline will:
 4. Deploy Kubernetes workloads
 5. Validate gateway/backend connectivity
 
+## What's Next
+
+### Phase 1B
+
+1. Implement logic for terragrunt/workspace to be able to manage multiple environments
+2. Separate repo for terraform modules
+3. Handle the use case to delete the kubernetes objects
+4. Use of OIDC for github workflows
+5. Enable and version control EKS critical Add-ons like kube-proxy, CoreDNS, pod identity agent, vpc-cni etc.
+
+### Phase 2: Production Readiness
+
+1. **Ingress Gateway**
+   - to manage the routing between services and internet
+
+2. **Observability Stack**
+   - Prometheus + Grafana
+   - ELK or CloudWatch Logs Insights
+
+3. **GitOps** (ArgoCD/Flux)
+   - Declarative application deployment
+   - Automated sync from Git
+   - Rollback capabilities
+
+4. **Secret Management**
+   - External Secrets Operator with AWS Secrets Manager
+   - Vault for dynamic secrets
+   - Sealed Secrets for Git storage
+
 ## Architecture Details
 
 ### Networking Configuration
@@ -159,14 +188,6 @@ Located in `.github/workflows/deploy.yml`:
    - Deploy gateway proxy
    - Dry-run validation before apply
 
-
-### Least Privilege Principle
-
-- EKS cluster roles: Minimal permissions for cluster operations
-- Node roles: EC2, ECR, CloudWatch permissions only
-- Service accounts: Scoped to specific AWS resources needed
-- No wildcard permissions in production roles
-
 ## Design Trade-offs
 
 ### Decisions Made
@@ -201,32 +222,3 @@ Due to the challenge timeline, the following were simplified:
 - Basic NGINX proxy (no advanced routing)
 - Hardcoded backend endpoint (no dynamic discovery)
 - Basic NetworkPolicy examples
-
-## What's Next
-
-### Phase 1B
-
-1. Implement logic for terragrunt/workspace to be able to manage multiple environments
-2. Separate repo for terraform modules
-3. Handle the use case to delete the kubernetes objects
-4. Use of OIDC for github workflows
-5. Enable and version control EKS critical Add-ons like kube-proxy, CoreDNS, pod identity agent, vpc-cni etc.
-
-### Phase 2: Production Readiness
-
-1. **Ingress Gateway**
-   - to manage the routing between services and internet
-
-2. **Observability Stack**
-   - Prometheus + Grafana
-   - ELK or CloudWatch Logs Insights
-
-3. **GitOps** (ArgoCD/Flux)
-   - Declarative application deployment
-   - Automated sync from Git
-   - Rollback capabilities
-
-4. **Secret Management**
-   - External Secrets Operator with AWS Secrets Manager
-   - Vault for dynamic secrets
-   - Sealed Secrets for Git storage
