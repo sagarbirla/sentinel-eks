@@ -46,7 +46,16 @@ Add the following secrets to your GitHub repository:
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
 
-### 3. Deploy via GitHub Actions
+### 3. Craete backend bucket
+
+```cd bootstrap
+terraform init
+terraform apply -var="backend_bucket_name=<bucket-name>
+
+# Update backend.tf file with the bucket name
+```
+
+### 4. Deploy via GitHub Actions
 
 ```bash
 # Push to main branch to trigger deployment
@@ -264,18 +273,20 @@ Due to the challenge timeline, the following were simplified:
 
 ## What's Next
 
+### Phase 1.b
+
+1. Implement logic for terragrunt/workspace to be able to manage multiple environments
+2. Handle the use case to delete the kubernetes objects
+3. Use of OIDC for github workflows
+
 ### Phase 2: Production Readiness
 
-1. **Service Mesh** (Istio/Linkerd)
-   - mTLS everywhere
-   - Advanced traffic management
-   - Observability built-in
+1. **Ingress Gateway**
+   - to manage the routing between services and internet
 
 2. **Observability Stack**
    - Prometheus + Grafana
    - ELK or CloudWatch Logs Insights
-   - AWS X-Ray for distributed tracing
-   - Alert manager integration
 
 3. **GitOps** (ArgoCD/Flux)
    - Declarative application deployment

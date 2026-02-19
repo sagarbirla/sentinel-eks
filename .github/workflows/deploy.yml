@@ -202,7 +202,7 @@ jobs:
       - name: Terraform Apply
         if: steps.tfcheck.outputs.tf_changed == 'true'
         id: apply
-        run: terraform plan -auto-approve
+        run: terraform apply -auto-approve
 
   tf-output:
     name: Terraform Output

@@ -12,15 +12,13 @@ terraform {
     }
   }
 
-  # Backend configuration for state management
-  # Uncomment and configure for production use
-  # backend "s3" {
-  #   bucket         = "rapyd-sentinel-terraform-state"
-  #   key            = "infra/terraform.tfstate"
-  #   region         = "us-east-1"
-  #   encrypt        = true
-  #   dynamodb_table = "terraform-state-lock"
-  # }
+  backend "s3" {
+    bucket       = "rapyd-poc-sagar-terraform-state"
+    key          = "infra/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
