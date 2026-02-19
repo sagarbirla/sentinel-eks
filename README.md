@@ -25,8 +25,6 @@ This project implements a production-ready, multi-VPC Kubernetes architecture fo
 4. **EKS Clusters**:
    - Gateway cluster: t3.medium nodes (2-4 instances)
    - Backend cluster: t3.medium nodes (2-4 instances)
-   - IRSA (IAM Roles for Service Accounts) enabled
-   - Private endpoint access
 
 ## Prerequisites
 
@@ -40,33 +38,15 @@ This project implements a production-ready, multi-VPC Kubernetes architecture fo
 
 ### 1. Fork and Clone
 
-### 2. Configure AWS OIDC (Recommended)
-
-Set up GitHub OIDC provider in AWS:
-
-```bash
-# This is done once per AWS account
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com \
-  --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
-```
-
-### 3. Configure GitHub Secrets
+### 2. Configure AWS Access
 
 Add the following secrets to your GitHub repository:
 
-- `AWS_ACCOUNT_ID`: Your AWS account ID
-- `AWS_REGION`: Target AWS region (e.g., us-east-1)
-
-For OIDC (recommended):
-- Create IAM role with trust policy for GitHub Actions
-
-For static credentials (fallback):
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
 
-### 4. Deploy via GitHub Actions
+### 3. Deploy via GitHub Actions
 
 ```bash
 # Push to main branch to trigger deployment
@@ -109,46 +89,6 @@ kubectl apply -f kubernetes/gateway/
 
 ### Networking Configuration
 
-#### VPC Gateway (10.0.0.0/16)
-- **Public Subnets**: 10.0.1.0/24, 10.0.2.0/24
-  - Host NAT Gateways and Load Balancers
-  - Internet Gateway attached
-  
-- **Private Subnets**: 10.0.10.0/24, 10.0.11.0/24
-  - EKS worker nodes
-  - Route to internet via NAT Gateway
-  - Route to Backend VPC via peering connection
-
-#### VPC Backend (10.1.0.0/16)
-- **Private Subnets**: 10.1.10.0/24, 10.1.11.0/24
-  - EKS worker nodes
-  - Route to internet via NAT Gateway
-  - Route to Gateway VPC via peering connection
-  - No public subnets (fully private)
-
-#### VPC Peering
-- Bidirectional routing between VPCs
-- Routes added to all private subnet route tables
-- DNS resolution enabled across peering connection
-
-### Security Model
-
-#### Security Groups
-
-1. **Gateway EKS Nodes SG**
-   - Ingress: Port 80/443 from ALB
-   - Egress: All traffic to Backend VPC CIDR
-   - Egress: Port 443 to AWS services
-
-2. **Backend EKS Nodes SG**
-   - Ingress: Port 8080 from Gateway VPC CIDR only
-   - Egress: Port 443 to AWS services
-   - No direct internet access
-
-3. **ALB Security Group**
-   - Ingress: Port 80/443 from 0.0.0.0/0
-   - Egress: To Gateway EKS nodes
-
 #### Kubernetes NetworkPolicy
 
 Backend cluster implements NetworkPolicy to restrict pod-to-pod communication:
@@ -179,10 +119,10 @@ spec:
 
 The Gateway proxy forwards traffic to the Backend service:
 
-1. **Service Discovery**: Backend service DNS name is resolved within the cluster
+1. **Service Discovery**: Backend service is running behind an internal NLB
 2. **Network Path**: 
    - Request → ALB (public) → Gateway Proxy Pod
-   - Gateway Proxy → VPC Peering → Backend Service Pod
+   - Gateway Proxy → VPC Peering → Internal NLB → Backend Service Pod
 3. **Security**: 
    - Traffic flows over private IPs only
    - Security Groups enforce source/destination restrictions
@@ -205,9 +145,7 @@ server {
 }
 ```
 
-The backend service endpoint is:
-- Resolved via Route53 private hosted zone (production approach)
-- Or hardcoded backend service ClusterIP (POC approach)
+The backend service endpoint is rendered during the CI/CD pipeline
 
 ## CI/CD Pipeline
 
@@ -237,27 +175,6 @@ Located in `.github/workflows/deploy.yml`:
    - Deploy gateway proxy
    - Dry-run validation before apply
 
-5. **Verify**
-   - Health check on backend service
-   - Connectivity test from proxy to backend
-   - End-to-end smoke test
-
-### OIDC Authentication
-
-The pipeline uses GitHub OIDC to assume an AWS IAM role without long-lived credentials:
-
-```yaml
-permissions:
-  id-token: write
-  contents: read
-
-- name: Configure AWS Credentials
-  uses: aws-actions/configure-aws-credentials@v4
-  with:
-    role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-    aws-region: ${{ secrets.AWS_REGION }}
-```
-
 ## IAM Roles and Permissions
 
 ### Naming Convention
@@ -270,9 +187,6 @@ Following the required naming prefixes:
   - `eks-backend-cluster-role`
   - `eks-backend-node-role`
 
-- `sentinel-*`: Application-specific roles
-  - `sentinel-backend-service-role` (for IRSA)
-  - `sentinel-gateway-proxy-role` (for IRSA)
 
 ### Least Privilege Principle
 
@@ -306,12 +220,12 @@ Following the required naming prefixes:
    - **Production**: Add Calico or AWS VPC CNI Network Policy for defense-in-depth
 
 5. **Service Discovery**
-   - **Chosen**: Hardcoded service IP for POC
+   - **Chosen**: Hardcoded NLB FQDN for POC
    - **Rationale**: Simplicity, no DNS dependencies
    - **Production**: Use Route53 private hosted zones or service mesh
 
 6. **Load Balancer Type**
-   - **Chosen**: Classic Load Balancer (NLB fallback)
+   - **Chosen**: Load Balancer
    - **Rationale**: Simple integration with EKS
    - **Production**: Use ALB with WAF integration
 
@@ -348,26 +262,6 @@ Due to the challenge timeline, the following were simplified:
 
 ## Security Considerations
 
-### Implemented
-
-- ✅ Private subnets for all workloads
-- ✅ No public EC2 instances
-- ✅ Security Groups with least privilege
-- ✅ VPC Flow Logs enabled
-- ✅ EKS cluster endpoint private access
-- ✅ IAM roles with restricted permissions
-- ✅ Secrets in AWS Secrets Manager (for production)
-
-### Future Enhancements
-
-- 🔲 TLS/mTLS between services
-- 🔲 AWS WAF on ALB
-- 🔲 GuardDuty for threat detection
-- 🔲 KMS encryption for EBS volumes
-- 🔲 Pod Security Standards enforcement
-- 🔲 OPA for policy enforcement
-- 🔲 VPN or PrivateLink for operator access
-
 ## What's Next
 
 ### Phase 2: Production Readiness
@@ -392,44 +286,3 @@ Due to the challenge timeline, the following were simplified:
    - External Secrets Operator with AWS Secrets Manager
    - Vault for dynamic secrets
    - Sealed Secrets for Git storage
-
-5. **Advanced Networking**
-   - AWS App Mesh or Istio
-   - AWS PrivateLink for AWS services
-   - Transit Gateway for multi-region
-
-6. **Disaster Recovery**
-   - Multi-region setup
-   - Automated backups (Velero)
-   - RTO/RPO targets defined
-
-7. **Compliance & Governance**
-   - AWS Config rules
-   - CloudTrail for audit
-   - Compliance scanning (Prowler, ScoutSuite)
-   - Cost allocation tags
-
-## Troubleshooting
-
-### EKS Cluster Access
-
-```bash
-# Update kubeconfig
-aws eks update-kubeconfig --name eks-gateway --region us-east-1
-
-# Verify access
-kubectl get nodes
-```
-
-### Cross-VPC Connectivity Issues
-
-```bash
-# Test from Gateway pod
-kubectl exec -it <gateway-pod> -- curl http://<backend-service-ip>:8080
-
-# Check security groups
-aws ec2 describe-security-groups --group-ids <sg-id>
-
-# Verify peering routes
-aws ec2 describe-route-tables --route-table-ids <rt-id>
-```
