@@ -230,7 +230,7 @@ resource "aws_eks_node_group" "this" {
 
 ### CANT BE USED BECAUSE OF LACK OF PERMISSIONS TO CREATE AN OIDC PROVIDER
 
-# OIDC Provider for IRSA (IAM Roles for Service Accounts)
+# OIDC Provider for IRSA ((IAM Roles for Service Accounts))
 
 # data "tls_certificate" "this" {
 #   url = aws_eks_cluster.this.identity[0].oidc[0].issuer
