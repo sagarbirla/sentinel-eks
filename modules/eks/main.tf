@@ -1,9 +1,10 @@
 # EKS Module - Managed Kubernetes Cluster
 
-# IAM Role for EKS Cluster
-resource "aws_iam_role" "cluster" {
-  name = "${var.cluster_name}-cluster-role"
+# IAM Module for EKS Cluster Role
+module "cluster_iam" {
+  source = "../iam"
 
+  role_name          = "${var.cluster_name}-cluster-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -16,17 +17,11 @@ resource "aws_iam_role" "cluster" {
       }
     ]
   })
-}
 
-# Attach required policies to cluster role
-resource "aws_iam_role_policy_attachment" "cluster_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-  role       = aws_iam_role.cluster.name
-}
-
-resource "aws_iam_role_policy_attachment" "cluster_vpc_resource_controller" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
-  role       = aws_iam_role.cluster.name
+  managed_policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+    "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
+  ]
 }
 
 # Security Group for EKS Cluster
@@ -124,7 +119,7 @@ resource "aws_security_group_rule" "additional" {
 resource "aws_eks_cluster" "this" {
   name     = var.cluster_name
   version  = var.cluster_version
-  role_arn = aws_iam_role.cluster.arn
+  role_arn = module.cluster_iam.role_arn
 
   vpc_config {
     subnet_ids              = var.subnet_ids
@@ -143,15 +138,15 @@ resource "aws_eks_cluster" "this" {
   )
 
   depends_on = [
-    aws_iam_role_policy_attachment.cluster_policy,
-    aws_iam_role_policy_attachment.cluster_vpc_resource_controller
+    module.cluster_iam
   ]
 }
 
-# IAM Role for EKS Node Group
-resource "aws_iam_role" "node" {
-  name = "${var.cluster_name}-node-role"
+# IAM Module for EKS Node Group Role
+module "node_iam" {
+  source = "../iam"
 
+  role_name          = "${var.cluster_name}-node-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -164,22 +159,12 @@ resource "aws_iam_role" "node" {
       }
     ]
   })
-}
 
-# Attach required policies to node role
-resource "aws_iam_role_policy_attachment" "node_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-  role       = aws_iam_role.node.name
-}
-
-resource "aws_iam_role_policy_attachment" "node_cni_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-  role       = aws_iam_role.node.name
-}
-
-resource "aws_iam_role_policy_attachment" "node_ecr_policy" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-  role       = aws_iam_role.node.name
+  managed_policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+    "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+  ]
 }
 
 ### CANT BE USED BECAUSE OF LACK OF PERMISSIONS TO ACCESS SSM PARAMETER
@@ -194,7 +179,7 @@ resource "aws_eks_node_group" "this" {
   node_group_name = var.node_group_name
   version         = aws_eks_cluster.this.version
   #release_version = nonsensitive(data.aws_ssm_parameter.eks_ami_release_version.value)
-  node_role_arn = aws_iam_role.node.arn
+  node_role_arn = module.node_iam.role_arn
   subnet_ids    = var.subnet_ids
 
   instance_types = var.node_instance_types
@@ -217,9 +202,7 @@ resource "aws_eks_node_group" "this" {
   )
 
   depends_on = [
-    aws_iam_role_policy_attachment.node_policy,
-    aws_iam_role_policy_attachment.node_cni_policy,
-    aws_iam_role_policy_attachment.node_ecr_policy
+    module.node_iam
   ]
 
   # Allow external changes without Terraform plan difference

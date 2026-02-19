@@ -28,6 +28,11 @@ output "public_route_table_id" {
   value       = aws_route_table.public.id
 }
 
+output "public_route_table_ids" {
+  description = "IDs of public route tables (as a list)"
+  value       = [aws_route_table.public.id]
+}
+
 output "nat_gateway_ids" {
   description = "IDs of NAT gateways"
   value       = aws_nat_gateway.this[*].id

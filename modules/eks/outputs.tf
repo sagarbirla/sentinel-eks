@@ -30,12 +30,12 @@ output "node_security_group_id" {
 
 output "cluster_iam_role_arn" {
   description = "IAM role ARN of the EKS cluster"
-  value       = aws_iam_role.cluster.arn
+  value       = module.cluster_iam.role_arn
 }
 
 output "node_iam_role_arn" {
   description = "IAM role ARN of the EKS nodes"
-  value       = aws_iam_role.node.arn
+  value       = module.node_iam.role_arn
 }
 
 # output "oidc_provider_arn" {
