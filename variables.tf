@@ -4,11 +4,6 @@ variable "aws_region" {
   default     = "eu-west-1"
 }
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "poc"
-}
 
 # VPC Configuration
 variable "gateway_vpc_cidr" {
