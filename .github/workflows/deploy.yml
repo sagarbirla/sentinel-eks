@@ -35,7 +35,7 @@ jobs:
         continue-on-error: false
 
       - name: Terraform Init
-        run: terraform init
+        run: terraform init -backend=false
 
       - name: Terraform Validate
         run: terraform validate
@@ -57,7 +57,7 @@ jobs:
           exit 1
 
   validate-kyaml:
-    name: Validate Kubernetes Manifests
+    name: Validate Kubernetes YAML
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -152,202 +152,217 @@ jobs:
               body: output
             });
 
-  # apply:
-  #   name: Terraform Apply
-  #   runs-on: ubuntu-latest
-  #   needs: plan
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  #     - name: Check for .tf file changes
-  #       id: tfcheck
-  #       run: |
-  #         git fetch origin ${{ github.base_ref || 'main' }}
-  #         if git diff --name-only origin/${{ github.base_ref || 'main' }}...${{ github.sha }} | grep -qE '\.tf$'; then
-  #           echo "tf_changed=true" >> $GITHUB_OUTPUT
-  #         else
-  #           echo "tf_changed=false" >> $GITHUB_OUTPUT
-  #         fi
+      - name: Check for .tf file changes
+        id: tfcheck
+        run: |
+          git fetch origin ${{ github.base_ref || 'main' }}
+          if git diff --name-only origin/${{ github.base_ref || 'main' }}...${{ github.sha }} | grep -qE '\.tf$'; then
+            echo "tf_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "tf_changed=false" >> $GITHUB_OUTPUT
+          fi
 
-  #     - name: Configure AWS Credentials (OIDC)
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-  #         aws-region: ${{ env.AWS_REGION }}
-  #       continue-on-error: true
+      # - name: Configure AWS Credentials (OIDC)
+      #   if: steps.tfcheck.outputs.tf_changed == 'true'
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+      #     aws-region: ${{ env.AWS_REGION }}
+      #   continue-on-error: true
 
-  #     - name: Configure AWS Credentials (Fallback)
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ env.AWS_REGION }}
+      - name: Configure AWS Credentials (Fallback)
+        if: steps.tfcheck.outputs.tf_changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  #     - name: Setup Terraform
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       uses: hashicorp/setup-terraform@v3
-  #       with:
-  #         terraform_version: ${{ env.TF_VERSION }}
-  #         terraform_wrapper: false
+      - name: Setup Terraform
+        if: steps.tfcheck.outputs.tf_changed == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
 
-  #     - name: Terraform Init
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       run: terraform init
+      - name: Terraform Init
+        if: steps.tfcheck.outputs.tf_changed == 'true'
+        run: terraform init
 
-  #     - name: Terraform Apply
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       id: apply
-  #       run: terraform apply -auto-approve
+      - name: Terraform Apply
+        if: steps.tfcheck.outputs.tf_changed == 'true'
+        id: apply
+        run: terraform apply -auto-approve
 
-  #     - name: Save Outputs
-  #       if: steps.tfcheck.outputs.tf_changed == 'true'
-  #       id: outputs
-  #       run: |
-  #         echo "gateway_cluster=$(terraform output -raw eks_gateway_cluster_name)" >> $GITHUB_OUTPUT
-  #         echo "backend_cluster=$(terraform output -raw eks_backend_cluster_name)" >> $GITHUB_OUTPUT
+  tf-output:
+    name: Terraform Output
+    runs-on: ubuntu-latest
+    needs: apply
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Terraform Init
+        run: terraform init
+      - name: Get Gateway Cluster Name
+        id: gateway
+        run: |
+          echo "gateway_cluster=$(terraform output -raw eks_gateway_cluster_name)" >> $GITHUB_OUTPUT
+      - name: Get Backend Cluster Name
+        id: backend
+        run: |
+          echo "backend_cluster=$(terraform output -raw eks_backend_cluster_name)" >> $GITHUB_OUTPUT
+    outputs:
+      gateway_cluster: ${{ steps.gateway.outputs.gateway_cluster }}
+      backend_cluster: ${{ steps.backend.outputs.backend_cluster }}
 
-  #   outputs:
-  #     gateway_cluster: ${{ steps.outputs.outputs.gateway_cluster }}
-  #     backend_cluster: ${{ steps.outputs.outputs.backend_cluster }}
+  deploy:
+    name: Deploy Applications
+    runs-on: ubuntu-latest
+    needs: [tf-output, validate-kyaml]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-  # deploy:
-  #   name: Deploy Applications
-  #   runs-on: ubuntu-latest
-  #   needs: validate-kyaml
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v4
+      - name: Check for changes in kubernetes folder
+        id: kubecheck
+        run: |
+          git fetch origin ${{ github.base_ref || 'main' }}
+          if git diff --name-only origin/${{ github.base_ref || 'main' }}...${{ github.sha }} | grep -qE '^kubernetes/'; then
+            echo "kube_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "kube_changed=false" >> $GITHUB_OUTPUT
+          fi
 
-  #     - name: Check for changes in kubernetes folder
-  #       id: kubecheck
-  #       run: |
-  #         git fetch origin ${{ github.base_ref || 'main' }}
-  #         if git diff --name-only origin/${{ github.base_ref || 'main' }}...${{ github.sha }} | grep -qE '^kubernetes/'; then
-  #           echo "kube_changed=true" >> $GITHUB_OUTPUT
-  #         else
-  #           echo "kube_changed=false" >> $GITHUB_OUTPUT
-  #         fi
+      # - name: Configure AWS Credentials (OIDC)
+      #   if: steps.kubecheck.outputs.kube_changed == 'true'
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
+      #     aws-region: ${{ env.AWS_REGION }}
+      #   continue-on-error: true
 
-  #     # - name: Configure AWS Credentials (OIDC)
-  #     #   if: steps.kubecheck.outputs.kube_changed == 'true'
-  #     #   uses: aws-actions/configure-aws-credentials@v4
-  #     #   with:
-  #     #     role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
-  #     #     aws-region: ${{ env.AWS_REGION }}
-  #     #   continue-on-error: true
+      - name: Configure AWS Credentials (Fallback)
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  #     - name: Configure AWS Credentials (Fallback)
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ env.AWS_REGION }}
+      - name: Setup kubectl
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.34.0'
 
-  #     - name: Setup kubectl
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       uses: azure/setup-kubectl@v4
-  #       with:
-  #         version: 'v1.34.0'
+      - name: Configure kubectl for Backend Cluster
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ needs.tf-output.outputs.backend_cluster }}
 
-  #     - name: Configure kubectl for Backend Cluster
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ needs.apply.outputs.backend_cluster }}
+      - name: Deploy Backend Service (Dry Run)
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl apply -f kubernetes/backend/ --dry-run=client
 
-  #     - name: Deploy Backend Service (Dry Run)
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl apply -f kubernetes/backend/ --dry-run=client
+      - name: Deploy Backend Service
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl apply -f kubernetes/backend/
 
-  #     - name: Deploy Backend Service
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl apply -f kubernetes/backend/
+      - name: Wait for Backend Service
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl wait --for=condition=available --timeout=300s deployment/backend-service
+          kubectl get svc backend-service
 
-  #     - name: Wait for Backend Service
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl wait --for=condition=available --timeout=300s deployment/backend-service
-  #         kubectl get svc backend-service
+      - name: Get Backend Service IP
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        id: backend_ip
+        run: |
+          BACKEND_IP=$(kubectl get svc backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$BACKEND_IP" ]; then
+            BACKEND_IP=$(kubectl get svc backend-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
+          echo "Backend Service External IP/Hostname: $BACKEND_IP"
+          echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
 
-  #     - name: Get Backend Service IP
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       id: backend_ip
-  #       run: |
-  #         BACKEND_IP=$(kubectl get svc backend-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-  #         if [ -z "$BACKEND_IP" ]; then
-  #           BACKEND_IP=$(kubectl get svc backend-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  #         fi
-  #         echo "Backend Service External IP/Hostname: $BACKEND_IP"
-  #         echo "backend_ip=$BACKEND_IP" >> $GITHUB_OUTPUT
+      - name: Configure kubectl for Gateway Cluster
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ needs.tf-output.outputs.gateway_cluster }}
 
-  #     - name: Configure kubectl for Gateway Cluster
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         aws eks update-kubeconfig --region ${{ env.AWS_REGION }} --name ${{ needs.apply.outputs.gateway_cluster }}
+      - name: Update Gateway Proxy Configuration
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          sed -i "s/BACKEND_SERVICE_IP/${{ steps.backend_ip.outputs.backend_ip }}/g" kubernetes/gateway/configmap.yaml
 
-  #     - name: Update Gateway Proxy Configuration
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         sed -i "s/BACKEND_SERVICE_IP/${{ steps.backend_ip.outputs.backend_ip }}/g" kubernetes/gateway/configmap.yaml
+      - name: Deploy Gateway Proxy (Dry Run)
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl apply -f kubernetes/gateway/ --dry-run=client
 
-  #     - name: Deploy Gateway Proxy (Dry Run)
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl apply -f kubernetes/gateway/ --dry-run=client
+      - name: Deploy Gateway Proxy
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl apply -f kubernetes/gateway/
 
-  #     - name: Deploy Gateway Proxy
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl apply -f kubernetes/gateway/
+      - name: Wait for Gateway Proxy
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          kubectl wait --for=condition=available --timeout=300s deployment/gateway-proxy
+          kubectl get svc gateway-proxy
 
-  #     - name: Wait for Gateway Proxy
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         kubectl wait --for=condition=available --timeout=300s deployment/gateway-proxy
-  #         kubectl get svc gateway-proxy
+      - name: Get Load Balancer URL
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        id: lb_url
+        run: |
+          echo "Waiting for Load Balancer to be provisioned..."
+          sleep 60
+          LB_URL=$(kubectl get svc gateway-proxy -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$LB_URL" ]; then
+            LB_URL=$(kubectl get svc gateway-proxy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
+          echo "Load Balancer URL: $LB_URL"
+          echo "lb_url=$LB_URL" >> $GITHUB_OUTPUT
 
-  #     - name: Get Load Balancer URL
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       id: lb_url
-  #       run: |
-  #         echo "Waiting for Load Balancer to be provisioned..."
-  #         sleep 60
-  #         LB_URL=$(kubectl get svc gateway-proxy -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-  #         if [ -z "$LB_URL" ]; then
-  #           LB_URL=$(kubectl get svc gateway-proxy -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-  #         fi
-  #         echo "Load Balancer URL: $LB_URL"
-  #         echo "lb_url=$LB_URL" >> $GITHUB_OUTPUT
-
-  #     - name: Test Connectivity
-  #       if: steps.kubecheck.outputs.kube_changed == 'true'
-  #       run: |
-  #         echo "Testing end-to-end connectivity..."
-  #         for i in {1..10}; do
-  #           echo "Attempt $i/10..."
-  #           if curl -f http://${{ steps.lb_url.outputs.lb_url }} --max-time 10; then
-  #             echo "✅ Connectivity test passed!"
-  #             exit 0
-  #           fi
-  #           sleep 10
-  #         done
-  #         echo "❌ Connectivity test failed after 10 attempts"
-  #         exit 1
+      - name: Test Connectivity
+        if: steps.kubecheck.outputs.kube_changed == 'true'
+        run: |
+          echo "Testing end-to-end connectivity..."
+          for i in {1..10}; do
+            echo "Attempt $i/10..."
+            if curl -f http://${{ steps.lb_url.outputs.lb_url }} --max-time 10; then
+              echo "✅ Connectivity test passed!"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Connectivity test failed after 10 attempts"
+          exit 1
 
       # - name: Deployment Summary
       #   run: |
       #     echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
       #     echo "" >> $GITHUB_STEP_SUMMARY
       #     echo "### Infrastructure" >> $GITHUB_STEP_SUMMARY
-      #     echo "- Gateway Cluster: \`${{ needs.apply.outputs.gateway_cluster }}\`" >> $GITHUB_STEP_SUMMARY
-      #     echo "- Backend Cluster: \`${{ needs.apply.outputs.backend_cluster }}\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "- Gateway Cluster: \`${{ needs.tf-output.outputs.gateway_cluster }}\`" >> $GITHUB_STEP_SUMMARY
+      #     echo "- Backend Cluster: \`${{ needs.tf-output.outputs.backend_cluster }}\`" >> $GITHUB_STEP_SUMMARY
       #     echo "" >> $GITHUB_STEP_SUMMARY
       #     echo "### Services" >> $GITHUB_STEP_SUMMARY
       #     echo "- Backend Service IP: \`${{ steps.backend_ip.outputs.backend_ip }}\`" >> $GITHUB_STEP_SUMMARY
