@@ -276,9 +276,10 @@ Due to the challenge timeline, the following were simplified:
 ### Phase 1B
 
 1. Implement logic for terragrunt/workspace to be able to manage multiple environments
-2. Handle the use case to delete the kubernetes objects
-3. Use of OIDC for github workflows
-4. Enable and version control EKS critical Add-ons like kube-proxy, CoreDNS, pod identity agent, vpc-cni etc.
+2. Separate repo for terraform modules
+3. Handle the use case to delete the kubernetes objects
+4. Use of OIDC for github workflows
+5. Enable and version control EKS critical Add-ons like kube-proxy, CoreDNS, pod identity agent, vpc-cni etc.
 
 ### Phase 2: Production Readiness
 

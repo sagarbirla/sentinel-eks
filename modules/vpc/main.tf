@@ -7,8 +7,8 @@ terraform {
     }
   }
 }
-# VPC Module - Creates isolated VPC with public and private subnets
 
+# VPC Module - Creates isolated VPC with public and private subnets
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = var.enable_dns_hostnames
