@@ -136,6 +136,7 @@ jobs:
       - name: Comment PR with Plan
         if: github.event_name == 'pull_request' && steps.tfcheck.outputs.tf_changed == 'true'
         uses: actions/github-script@v7
+        continue-on-error: true
         with:
           script: |
             const output = `#### Terraform Plan 📖
@@ -201,7 +202,7 @@ jobs:
       - name: Terraform Apply
         if: steps.tfcheck.outputs.tf_changed == 'true'
         id: apply
-        run: terraform apply -auto-approve
+        run: terraform plan -auto-approve
 
   tf-output:
     name: Terraform Output

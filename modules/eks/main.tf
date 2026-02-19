@@ -4,7 +4,7 @@
 module "cluster_iam" {
   source = "../iam"
 
-  role_name          = "${var.cluster_name}-cluster-role"
+  role_name = "${var.cluster_name}-cluster-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -58,6 +58,10 @@ resource "aws_security_group" "node" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
+  }
+
+  lifecycle {
+    ignore_changes = [egress]
   }
 
   tags = merge(
@@ -146,7 +150,7 @@ resource "aws_eks_cluster" "this" {
 module "node_iam" {
   source = "../iam"
 
-  role_name          = "${var.cluster_name}-node-role"
+  role_name = "${var.cluster_name}-node-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
