@@ -109,3 +109,15 @@ variable "backend_node_max_size" {
   type        = number
   default     = 4
 }
+
+# GitHub Actions Configuration
+# variable "github_repository" {
+#   description = "GitHub repository in the format 'owner/repo'"
+#   type        = string
+# }
+
+# variable "github_branch" {
+#   description = "GitHub branch that is allowed to assume the role"
+#   type        = string
+#   default     = "main"
+# }
