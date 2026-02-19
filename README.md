@@ -2,7 +2,7 @@
 
 ## Overview
 
-This project implements a production-ready, multi-VPC Kubernetes architecture for Rapyd Sentinel, demonstrating secure cross-cluster communication, infrastructure as code best practices, and automated CI/CD deployment.
+This project implements a multi-VPC Kubernetes architecture for Rapyd Sentinel, demonstrating secure cross-cluster communication, infrastructure as code best practices, and automated CI/CD deployment.
 
 ### Key Components
 
@@ -10,7 +10,6 @@ This project implements a production-ready, multi-VPC Kubernetes architecture fo
    - CIDR: 10.0.0.0/16
    - 2 Private Subnets (AZ1, AZ2)
    - 2 Public Subnets (for NAT Gateways and Load Balancers)
-   - NAT Gateways for outbound connectivity
 
 2. **VPC Backend**: Hosts internal processing services
    - CIDR: 10.1.0.0/16
@@ -46,11 +45,11 @@ Add the following secrets to your GitHub repository:
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
 
-### 3. Craete backend bucket
+### 3. Create backend bucket
 
 ```cd bootstrap
 terraform init
-terraform apply -var="backend_bucket_name=<bucket-name>
+terraform apply -var="backend_bucket_name=<bucket-name>"
 
 # Update backend.tf file with the bucket name
 ```
@@ -58,41 +57,19 @@ terraform apply -var="backend_bucket_name=<bucket-name>
 ### 4. Deploy via GitHub Actions
 
 ```bash
-# Push to main branch to trigger deployment
+# PR creation will run validation and tf plan
+# PR merge will execute tf apply and kubectl apply -f kubernetes/*
 git add .
 git commit -m "Initial deployment"
-git push origin main
+git push origin HEAD:branchname
 ```
 
 The CI/CD pipeline will:
-1. Validate Terraform configuration
-2. Plan infrastructure changes
+1. Validate Terraform and k8s manifests
+2. Plan infrastructure changes and comment on the PR for easy review
 3. Apply Terraform (on main branch)
 4. Deploy Kubernetes workloads
-5. Validate connectivity
-
-### 5. Manual Deployment (Development Only)
-
-```bash
-# Initialize Terraform
-terraform init
-
-# Plan infrastructure
-terraform plan -out=tfplan
-
-# Apply infrastructure
-terraform apply tfplan
-
-# Configure kubectl
-aws eks update-kubeconfig --name eks-gateway --region eu-west-1
-aws eks update-kubeconfig --name eks-backend --region eu-west-1 --alias eks-backend
-
-# Deploy applications
-kubectl apply -f kubernetes/backend/
-kubectl --context eks-backend apply -f kubernetes/backend/
-
-kubectl apply -f kubernetes/gateway/
-```
+5. Validate gateway/backend connectivity
 
 ## Architecture Details
 
@@ -122,8 +99,6 @@ spec:
       port: 8080
 ```
 
-**Note**: NetworkPolicy requires a CNI that supports it (AWS VPC CNI with Network Policy support or Calico). In this implementation, we rely primarily on Security Groups at the infrastructure level for simplicity.
-
 ### Cross-Cluster Communication
 
 The Gateway proxy forwards traffic to the Backend service:
@@ -143,7 +118,7 @@ The NGINX proxy in the gateway cluster uses:
 
 ```nginx
 upstream backend {
-    server backend-service.backend-vpc.internal:8080;
+    server <internal-nlb-fqdn>:8080;
 }
 
 server {
@@ -168,11 +143,11 @@ Located in `.github/workflows/deploy.yml`:
    - Terraform format check
    - Terraform validate
    - TFLint for best practices
-   - Kubernetes manifest validation with kubeval
+   - Kubernetes manifest validation with yamllint and kubeconform
 
 2. **Plan**
    - Terraform plan with detailed output
-   - Plan artifact saved for review
+   - Plan output is commented on the PR for review
 
 3. **Apply** (main branch only)
    - Terraform apply
@@ -183,18 +158,6 @@ Located in `.github/workflows/deploy.yml`:
    - Deploy backend service
    - Deploy gateway proxy
    - Dry-run validation before apply
-
-## IAM Roles and Permissions
-
-### Naming Convention
-
-Following the required naming prefixes:
-
-- `eks-*`: EKS cluster and node group roles
-  - `eks-gateway-cluster-role`
-  - `eks-gateway-node-role`
-  - `eks-backend-cluster-role`
-  - `eks-backend-node-role`
 
 
 ### Least Privilege Principle
@@ -223,17 +186,12 @@ Following the required naming prefixes:
    - **Rationale**: Adequate for demo workloads, cost-effective
    - **Production**: Right-size based on workload (use t3.large or compute-optimized)
 
-4. **Network Policy Implementation**
-   - **Chosen**: Security Groups as primary control
-   - **Rationale**: Native AWS integration, well-understood
-   - **Production**: Add Calico or AWS VPC CNI Network Policy for defense-in-depth
-
-5. **Service Discovery**
+4. **Service Discovery**
    - **Chosen**: Hardcoded NLB FQDN for POC
    - **Rationale**: Simplicity, no DNS dependencies
    - **Production**: Use Route53 private hosted zones or service mesh
 
-6. **Load Balancer Type**
+5. **Load Balancer Type**
    - **Chosen**: Load Balancer
    - **Rationale**: Simple integration with EKS
    - **Production**: Use ALB with WAF integration
@@ -242,34 +200,7 @@ Due to the challenge timeline, the following were simplified:
 - Single NAT Gateway per VPC (not HA)
 - Basic NGINX proxy (no advanced routing)
 - Hardcoded backend endpoint (no dynamic discovery)
-- Limited observability (no Prometheus/Grafana)
-- No TLS termination
 - Basic NetworkPolicy examples
-
-## Cost Optimization
-
-### Current Costs (Estimated Monthly)
-
-| Component | Quantity | Unit Cost | Total |
-|-----------|----------|-----------|-------|
-| NAT Gateway | 2 | ~$32 | $64 |
-| NAT Gateway Data | Varies | $0.045/GB | ~$50 |
-| EKS Cluster | 2 | $0.10/hr | $144 |
-| EC2 t3.medium | 4-8 | $0.0416/hr | $120-240 |
-| Load Balancer | 1 | $16 | $16 |
-| VPC Peering | Free | - | $0 |
-| **Total** | | | **~$394-514/month** |
-
-### Optimization Strategies
-
-1. **NAT Gateway**: Use NAT instances or single shared NAT for non-prod
-2. **EKS Control Plane**: Use EKS Anywhere or k3s for dev environments
-3. **Compute**: Use Spot instances for non-critical workloads (60-90% savings)
-4. **Load Balancer**: Share ALB across services with path-based routing
-5. **Reserved Instances**: 1-year commitment for 30-40% savings
-6. **Auto-scaling**: Scale down during off-hours
-
-## Security Considerations
 
 ## What's Next
 
